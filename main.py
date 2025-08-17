@@ -4,14 +4,14 @@ from astrbot.api import logger
 
 @register(
     "telegram_private_blocker",
-    "YourName",
+    "hapemxg",
     "禁止在Telegram私聊中使用机器人",
     "1.0.0"
 )
 class TelegramPrivateBlockerPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        self.block_message = "抱歉，根据设定，我无法在私聊中回复您。"
+        self.block_message = "抱歉，根据设定，我无法在私聊中回复您。（ps：但是你还可以用一些不会调用LLM的指令，如/好感度 获取你和bot的当前好感度）"
 
     @filter.event_message_type(filter.EventMessageType.ALL, priority=999)
     async def block_telegram_private_chat(self, event: AstrMessageEvent):
