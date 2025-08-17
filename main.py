@@ -2,23 +2,40 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
-@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
-class MyPlugin(Star):
+@register(
+    "telegram_private_blocker", 
+    "YourName", 
+    "禁止在Telegram私聊中使用机器人", 
+    "1.0.0"
+)
+class TelegramPrivateBlockerPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        self.block_message = "抱歉，根据设定，我无法在私聊中回复您。"
 
-    async def initialize(self):
-        """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    
-    # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
+    # 使用通用消息事件监听器，并设置一个非常高的优先级（默认为0）
+    # 这样可以确保这个函数在其他所有指令和消息处理器之前运行
+    @filter.event_message_type(filter.EventMessageType.ALL, priority=999)
+    async def block_telegram_private_chat(self, event: AstrMessageEvent):
+        """
+        拦截并阻止在Telegram私聊中使用机器人
+        """
+        # 获取会话ID
+        # AstrMessageEvent -> AstrBotMessage -> session_id
+        session_id = event.message_obj.session_id
+        
+        # 检查会话ID是否以 'telegram:FriendMessage' 开头
+        if session_id.startswith("telegram:FriendMessage"):
+            logger.info(f"检测到Telegram私聊消息，已拦截。会话ID: {session_id}")
+            
+            # 返回预设的回复
+            yield event.plain_result(self.block_message)
+            
+            # 停止事件传播，后续的任何插件（包括指令处理、LLM调用）都不会被执行
+            event.stop_event()
+
+    # 你仍然可以保留其他的指令，它们在非Telegram私聊环境下会正常工作
     @filter.command("helloworld")
     async def helloworld(self, event: AstrMessageEvent):
-        """这是一个 hello world 指令""" # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
         user_name = event.get_sender_name()
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
-        logger.info(message_chain)
-        yield event.plain_result(f"Hello, {user_name}, 你发了 {message_str}!") # 发送一条纯文本消息
-
-    async def terminate(self):
-        """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+        yield event.plain_result(f"Hello, {user_name}!")
