@@ -1,41 +1,42 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
 @register(
-    "telegram_private_blocker", 
-    "YourName", 
-    "禁止在Telegram私聊中使用机器人", 
+    "telegram_private_blocker",
+    "YourName",
+    "禁止在Telegram私聊中使用机器人",
     "1.0.0"
 )
 class TelegramPrivateBlockerPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
         self.block_message = "抱歉，根据设定，我无法在私聊中回复您。"
+        logger.info("【TG私聊拦截器】插件已实例化。")
 
-    # 使用通用消息事件监听器，并设置一个非常高的优先级（默认为0）
-    # 这样可以确保这个函数在其他所有指令和消息处理器之前运行
+    async def initialize(self):
+        logger.info("【TG私聊拦截器】插件已成功加载并初始化！")
+
     @filter.event_message_type(filter.EventMessageType.ALL, priority=999)
     async def block_telegram_private_chat(self, event: AstrMessageEvent):
         """
         拦截并阻止在Telegram私聊中使用机器人
         """
-        # 获取会话ID
-        # AstrMessageEvent -> AstrBotMessage -> session_id
-        session_id = event.message_obj.session_id
+        platform = event.get_platform_id() 
+        message_type = event.get_message_type()
         
-        # 检查会话ID是否以 'telegram:FriendMessage' 开头
-        if session_id.startswith("telegram:FriendMessage"):
-            logger.info(f"检测到Telegram私聊消息，已拦截。会话ID: {session_id}")
-            
-            # 返回预设的回复
-            yield event.plain_result(self.block_message)
-            
-            # 停止事件传播，后续的任何插件（包括指令处理、LLM调用）都不会被执行
-            event.stop_event()
+        # 增加一个更详细的日志，打印出类型的名字，方便确认
+        message_type_name = message_type.name if hasattr(message_type, 'name') else str(message_type)
+        logger.info(f"--- 【TG私聊拦截器】捕获到新消息 ---")
+        logger.info(f"处理器正在运行 -> 平台: [{platform}], 消息类型对象: [{message_type}], 类型名: [{message_type_name}]")
 
-    # 你仍然可以保留其他的指令，它们在非Telegram私聊环境下会正常工作
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        user_name = event.get_sender_name()
-        yield event.plain_result(f"Hello, {user_name}!")
+        # 核心改动：我们直接比较 message_type 对象的 .name 属性，这是一个字符串
+        # 根据日志，这个名字就是 "FRIEND_MESSAGE"
+        if platform == "telegram" and message_type.name == "FRIEND_MESSAGE":
+            logger.info(f"条件满足：是Telegram私聊消息。准备拦截并停止事件传播。")
+            
+            yield event.plain_result(self.block_message)
+            event.stop_event()
+            logger.info(f"事件已停止。")
+        else:
+            logger.info(f"条件不满足：不是Telegram私聊消息，放行。")
